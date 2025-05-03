@@ -1,0 +1,88 @@
+// frontend/src/index.scss
+
+// Импортируем модули Sass (переменные, стили форм)
+// Используем @use вместо @import и задаем пространство имен (vars)
+@use './styles/variables' as vars;
+// Импортируем встроенный модуль color для функций типа adjust
+@use "sass:color";
+
+// Импортируем стили для контейнера форм
+@use './styles/forms';
+
+
+// Сброс базовых стилей (опционально, можно использовать normalize.css или reset.css)
+* {
+  box-sizing: border-box; // Модель коробки: граница и padding включаются в ширину/высоту
+  margin: 0; // Убираем внешние отступы по умолчанию
+  padding: 0; // Убираем внутренние отступы по умолчанию
+}
+
+body {
+  font-family: vars.$font-family-base; // Используем переменную шрифта
+  line-height: 1.6; // Межстрочный интервал
+  color: vars.$color-dark; // Цвет текста по умолчанию
+  background-color: vars.$color-background-light; // Светлый фон страницы
+  padding: vars.$spacing-unit * 3; // Базовый отступ от края окна
+}
+
+// Стили для корневого контейнера приложения в App.jsx
+.App {
+    max-width: 1200px; // Ограничиваем максимальную ширину контента
+    margin: 0 auto; // Центрируем контейнер
+    background-color: vars.$color-white; // Белый фон для основного контента
+    padding: vars.$spacing-unit * 4; // Внутренние отступы
+    border-radius: vars.$border-radius; // Скругление углов
+    box-shadow: 0 2px 10px rgba(vars.$color-black, 0.1); // Легкая тень
+}
+
+// Стили для навигации (пример)
+nav {
+    // Дополнительные стили для тега nav, если нужны
+     display: flex; // Делаем навигацию flex-контейнером
+     align-items: center; // Выравниваем элементы по центру по вертикали
+     justify-content: space-between; // Размещаем элементы с пространством между ними
+}
+
+nav ul {
+  list-style: none; // Убираем маркеры списка
+  padding: 0;
+  margin: 0; // Убираем стандартные внешние отступы списка
+  display: flex; // Размещаем пункты списка в ряд
+  gap: vars.$spacing-unit * 3; // Отступ между пунктами списка (ссылками)
+
+  // Убираем нижнюю границу, если nav flex-контейнер, можно добавить ее к .App или другому элементу
+  // border-bottom: 1px solid vars.$color-border;
+  // padding-bottom: vars.$spacing-unit * 2;
+}
+
+nav a {
+  text-decoration: none; // Убираем подчеркивание ссылок
+  color: vars.$color-medical-blue; // Цвет ссылок
+  font-weight: bold; // Жирный шрифт
+  padding: vars.$spacing-unit vars.$spacing-unit * 2; // Внутренний отступ вокруг текста ссылки
+  transition: color 0.3s ease; // Плавное изменение цвета при наведении
+
+  &:hover {
+    // Используем color.adjust для затемнения цвета при наведении
+    color: color.adjust(vars.$color-medical-blue, $lightness: -10%);
+  }
+}
+
+// Базовые стили для заголовков (пример)
+h1, h2, h3 {
+    color: vars.$color-medical-blue; // Цвет заголовков
+    margin-bottom: vars.$spacing-unit * 2; // Отступ под заголовками
+}
+
+// Стили для сообщений об ошибках и успехах (пример)
+.error-message {
+    color: vars.$color-danger; // Красный цвет для ошибок
+    text-align: center;
+    margin-bottom: vars.$spacing-unit * 2;
+}
+
+.success-message {
+     color: vars.$color-success; // Зеленый цвет для успеха
+     text-align: center;
+     margin-bottom: vars.$spacing-unit * 2;
+}
