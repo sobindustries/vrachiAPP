@@ -16,10 +16,10 @@ function Input({ label, id, type = 'text', value, onChange, ...props }) {
       {/* Если пропс label передан и не пустой, отображаем метку */}
       {label && <label htmlFor={id}>{label}</label>}
       <input
-        type={type}
-        id={id}
-        value={value}
-        onChange={onChange}
+        type={type} // Тип поля (text, password, email и т.д.)
+        id={id} // ID для связки с label
+        value={value} // Значение поля (контролируемый компонент)
+        onChange={onChange} // Обработчик изменения значения
         className="form-input" // Класс для стилизации самого поля ввода
         {...props} // Передаем остальные пропсы элементу <input>
       />

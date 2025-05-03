@@ -19,7 +19,7 @@ const loadAuthFromStorage = () => {
         const parsedUser = JSON.parse(user);
          // Проверяем базовую структуру распарсенных данных
         if (parsedUser && typeof parsedUser === 'object' && parsedUser.id && parsedUser.email) {
-             return { token, user: parsedUser, isAuthenticated: true, isLoading: false };
+             return { token, user: parsedUser, isAuthenticated: true, isLoading: false, error: null }; // Убедимся, что error сброшен
         } else {
              // Если распарсенные данные не соответствуют ожидаемой структуре
              console.error("User data in local storage is corrupted.");
@@ -27,7 +27,7 @@ const loadAuthFromStorage = () => {
              localStorage.removeItem(TOKEN_STORAGE_KEY);
              localStorage.removeItem(USER_STORAGE_KEY);
              setAuthToken(null);
-             return { token: null, user: null, isAuthenticated: false, isLoading: false };
+             return { token: null, user: null, isAuthenticated: false, isLoading: false, error: null };
         }
 
     } catch (e) {
@@ -37,12 +37,12 @@ const loadAuthFromStorage = () => {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
         localStorage.removeItem(USER_STORAGE_KEY);
         setAuthToken(null);
-        return { token: null, user: null, isAuthenticated: false, isLoading: false };
+        return { token: null, user: null, isAuthenticated: false, isLoading: false, error: null };
     }
   }
   // Если ничего не нашли в Local Storage
   setAuthToken(null); // Убеждаемся, что токен Axios сброшен
-  return { token: null, user: null, isAuthenticated: false, isLoading: false };
+  return { token: null, user: null, isAuthenticated: false, isLoading: false, error: null }; // Убедимся, что error сброшен
 };
 
 
@@ -54,7 +54,7 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
   user: null, // Объект пользователя {id, email, role, is_active}
   isAuthenticated: false, // Флаг, авторизован ли пользователь (наличие валидного токена и пользователя)
   isLoading: true, // Флаг, идет ли загрузка (например, при проверке токена при старте или при выполнении запросов)
-  error: null, // Для хранения последней ошибки (например, при логине)
+  error: null, // Для хранения последней ошибки (например, при логине или регистрации)
 
   // --- Функции для управления состоянием ---
 
@@ -72,7 +72,7 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
             .then(response => {
                 // Если запрос успешен (токен валиден)
                 console.log("Token validated, user data fetched:", response.data);
-                set({ user: response.data, isAuthenticated: true, error: null }); // Обновляем данные пользователя в сторе
+                set({ user: response.data, isAuthenticated: true, error: null }); // Обновляем данные пользователя в сторе, сбрасываем ошибку
                 localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.data)); // Обновляем данные пользователя в Local Storage
             })
             .catch(error => {
@@ -126,7 +126,7 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
 
       // Обновляем состояние стора с полученными данными.
-      set({ token, user, isAuthenticated: true, isLoading: false, error: null });
+      set({ token, user, isAuthenticated: true, isLoading: false, error: null }); // Сбрасываем ошибку
 
       return user; // Возвращаем данные пользователя из функции (может быть полезно в компоненте для перенаправления)
 
@@ -149,7 +149,7 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
     localStorage.removeItem(TOKEN_STORAGE_KEY); // Удаляем токен из Local Storage
     localStorage.removeItem(USER_STORAGE_KEY); // Удаляем данные пользователя из Local Storage
     // Сбрасываем состояние стора в исходное неавторизованное состояние
-    set({ token: null, user: null, isAuthenticated: false, isLoading: false, error: null });
+    set({ token: null, user: null, isAuthenticated: false, isLoading: false, error: null }); // Сбрасываем ошибку
   },
 
   // Функция для обновления данных пользователя в сторе (например, после обновления профиля на бэкенде)
@@ -160,7 +160,7 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
 
   // Функция для регистрации нового пользователя
   registerUser: async (email, password, role) => {
-     set({ isLoading: true, error: null }); // Начинаем загрузку (можно использовать отдельный флаг для регистрации)
+     set({ isLoading: true, error: null }); // Начинаем загрузку (можно использовать отдельный флаг для регистрации), сбрасываем ошибку
      try {
         // Отправляем запрос на эндпоинт бэкенда /register с данными пользователя (email, password, role)
         // Axios по умолчанию отправит данные как JSON, что соответствует ожидаемому формату на бэкенде.

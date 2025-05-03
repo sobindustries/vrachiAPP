@@ -78,11 +78,34 @@ h1, h2, h3 {
 .error-message {
     color: vars.$color-danger; // Красный цвет для ошибок
     text-align: center;
-    margin-bottom: vars.$spacing-unit * 2;
+    margin-bottom: vars.$spacing-unit * 2; // Отступ снизу
 }
 
 .success-message {
      color: vars.$color-success; // Зеленый цвет для успеха
      text-align: center;
      margin-bottom: vars.$spacing-unit * 2;
+}
+
+// Дополнительные стили для сообщений в зависимости от статуса подтверждения email
+.message-status-loading {
+    color: vars.$gray-600; /* Серый или нейтральный цвет */
+}
+
+.message-status-success {
+    color: vars.$color-success; /* Зеленый для успеха */
+    font-weight: bold;
+}
+
+.message-status-error,
+.message-status-expired,
+.message-status-invalid,
+.message-status-no-token {
+    color: vars.$color-danger; /* Красный для различных ошибок */
+    font-weight: bold;
+}
+.info-message {
+  color: vars.$color-info; // Голубой цвет для информации
+  text-align: center;
+  margin-bottom: vars.$spacing-unit * 2;
 }

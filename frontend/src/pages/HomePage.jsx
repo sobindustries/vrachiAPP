@@ -1,29 +1,37 @@
 // frontend/src/pages/HomePage.jsx
 import React from 'react';
 import useAuthStore from '../stores/authStore'; // Импортируем стор аутентификации
+import { Link } from 'react-router-dom'; // Импортируем Link для навигации
 
 function HomePage() {
-  const { isAuthenticated, user } = useAuthStore(); // Получаем статус авторизации и данные пользователя из стора
+  // Получаем статус авторизации и данные пользователя из стора
+  const { isAuthenticated, user } = useAuthStore();
 
   return (
     <div>
       <h1>Главная Страница</h1>
-      {/* TODO: Добавить контент для главной страницы */}
-      {/* Например, приветствие или информацию о платформе */}
+
       {isAuthenticated ? (
         // Контент для авторизованных пользователей
         <div>
-          <p>Добро пожаловать, {user?.email}!</p> {/* Отображаем email пользователя */}
+          <h2>Добро пожаловать, {user?.email} ({user?.role})!</h2> {/* Приветствие с email и ролью */}
+          <p>Вы успешно авторизованы.</p>
           {/* TODO: Добавить ссылки на личный кабинет, поиск врачей и т.д. */}
-          {/* <Link to="/profile">Перейти в Мой Профиль</Link> */}
-          {/* <Link to="/search-doctors">Найти врача</Link> */}
+          <p><Link to="/profile">Перейти в Мой Профиль</Link></p> {/* Ссылка на профиль */}
+          {/* <p><Link to="/search-doctors">Найти врача</Link></p> */}
+          {/* <p><Link to="/history">История консультаций</Link></p> */}
         </div>
       ) : (
         // Контент для неавторизованных пользователей
         <div>
-          <p>Добро пожаловать на платформу онлайн-консультаций с врачами.</p>
-          <p>Пожалуйста, войдите или зарегистрируйтесь, чтобы получить доступ к функциям.</p>
+          <h2>Добро пожаловать на платформу онлайн-консультаций с врачами.</h2>
+          <p>Пройдите быструю регистрацию и найдите подходящего специалиста.</p>
           {/* TODO: Добавить кнопки "Войти" и "Зарегистрироваться" */}
+           <div style={{marginTop: '20px'}}>
+             <Link to="/register"><button className="btn btn-medical-blue">Зарегистрироваться</button></Link> {/* Используем компонент Button или просто styled button */}
+             <span style={{margin: '0 10px'}}>или</span>
+             <Link to="/login"><button className="btn btn-secondary">Войти</button></Link>
+           </div>
         </div>
       )}
     </div>

@@ -78,6 +78,7 @@
         margin: 0;
         text-decoration: underline; // Подчеркивание
         font-weight: normal; // Обычный шрифт
+        cursor: pointer; // Курсор указателя
 
         &:hover {
             color: color.adjust(vars.$color-medical-blue, $lightness: -10%);
