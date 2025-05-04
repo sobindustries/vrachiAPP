@@ -1,19 +1,19 @@
 // frontend/src/styles/_forms.scss
-@use './variables' as vars; // Импортируем переменные
+@use './variables' as *; // Импортируем переменные без пространства имен
 
 .form-container {
     max-width: 500px; // Ограничиваем максимальную ширину контейнера формы
     margin: 0 auto; // Центрируем контейнер на странице
-    padding: vars.$spacing-unit * 4; // Внутренние отступы
-    border: 1px solid vars.$color-border; // Граница контейнера
-    border-radius: vars.$border-radius; // Скругление углов
-    background-color: vars.$color-white; // Белый фон контейнера
-    box-shadow: 0 1px 5px rgba(vars.$color-black, 0.05); // Легкая тень
+    padding: $spacing-unit * 4; // Внутренние отступы
+    border: 1px solid $color-border; // Граница контейнера
+    border-radius: $border-radius; // Скругление углов
+    background-color: $color-white; // Белый фон контейнера
+    box-shadow: 0 1px 5px rgba($color-black, 0.05); // Легкая тень
 
     h1 {
         text-align: center; // Заголовок формы по центру
-        margin-bottom: vars.$spacing-unit * 4; // Отступ под заголовком
-        color: vars.$color-medical-blue; // Цвет заголовка
+        margin-bottom: $spacing-unit * 4; // Отступ под заголовком
+        color: $color-medical-blue; // Цвет заголовка
     }
 
     form {
@@ -22,14 +22,14 @@
     }
 
     .button-group {
-        margin-top: vars.$spacing-unit * 4; // Отступ сверху над кнопкой отправки
+        margin-top: $spacing-unit * 4; // Отступ сверху над кнопкой отправки
         text-align: center; // Центрируем кнопку
     }
 
     .form-footer {
-         margin-top: vars.$spacing-unit * 3; // Отступ сверху для футера формы
+         margin-top: $spacing-unit * 3; // Отступ сверху для футера формы
          text-align: center; // Текст футера по центру
          font-size: 0.9rem; // Немного уменьшенный размер шрифта
-         color: vars.$gray-600; // Цвет текста
+         color: $gray-600; // Цвет текста
     }
 }

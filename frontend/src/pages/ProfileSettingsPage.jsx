@@ -8,15 +8,8 @@ import useAuthStore from '../stores/authStore'; // Импортируем сто
 import PatientProfileForm from '../components/PatientProfileForm'; // <--- ИМПОРТИРУЕМ
 import DoctorProfileForm from '../components/DoctorProfileForm'; // <--- ИМПОРТИРУЕМ
 
-
-// Импортируем компоненты Material UI для построения UI этой страницы
-import Container from '@mui/material/Container'; // Контейнер
-import Box from '@mui/material/Box'; // Универсальный контейнер
-import Typography from '@mui/material/Typography'; // Текст и заголовки
-import CircularProgress from '@mui/material/CircularProgress'; // Индикатор загрузки
-// TODO: Возможно понадобится Paper или Card для стилизации контейнера профиля
-// import Paper from '@mui/material/Paper';
-
+// Импортируем NextUI компоненты
+import { Card, CardBody, CardHeader, Divider, Avatar, Button, Spinner } from '@nextui-org/react';
 
 // Страница для просмотра и редактирования настроек профиля пользователя (Пациента или Врача)
 // Отображается по маршруту /profile (защищен ProtectedRoute)
@@ -124,8 +117,8 @@ function ProfileSettingsPage() {
         // можно вызвать setUser из стора и передать ему только UserResponse данные, если они приходят в ответ на сохранение профиля.
         // setUser(response.data); // Это обновит только поля из UserResponse, не из профиля
 
-        // Опционально: Сбросить флаг успешного сохранения через несколько секунд
-        // setTimeout(() => setSaveSuccess(false), 5000);
+        // Скрываем сообщение об успехе через 3 секунды
+        setTimeout(() => setSaveSuccess(false), 3000);
 
      } catch (err) {
         // Обработка ошибок сохранения (например, ошибка валидации на бэкенде, ошибка БД)
@@ -144,11 +137,12 @@ function ProfileSettingsPage() {
   // Если идет загрузка данных профиля
   if (isLoading) {
     return (
-        // Используем контейнер MUI Box для лейаута загрузки
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 200px)' }}> {/* minHeight для центрирования на части экрана */}
-            <CircularProgress /> {/* Индикатор загрузки MUI */}
-            <Typography variant="h6" sx={{ ml: 2 }}>Загрузка Профиля...</Typography> {/* Сообщение рядом с лоадером */}
-        </Box>
+      <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-5 text-gray-600 font-medium">Загрузка профиля...</p>
+        </div>
+      </div>
     );
   }
 
@@ -156,11 +150,88 @@ function ProfileSettingsPage() {
   // Сообщение "Профиль еще не создан" обрабатывается ниже, отображением формы.
   if (error && error !== "Профиль еще не создан. Пожалуйста, заполните информацию.") {
        return (
-         // Используем контейнер MUI Box для отображения ошибки
-         <Box sx={{ mt: 4, textAlign: 'center' }}>
-            <Typography variant="h5" color="error">Ошибка загрузки профиля</Typography> {/* Заголовок ошибки */}
-            <Typography color="error" sx={{ mt: 2 }}>{error}</Typography> {/* Текст ошибки */}
-         </Box>
+         <div className="py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-indigo-50 min-h-[calc(100vh-100px)]">
+           <div className="max-w-4xl mx-auto">
+             <div className="text-center mb-8">
+               <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 mb-2">
+                 Мой профиль
+               </h1>
+               <p className="text-gray-600">Управляйте личными данными и настройками</p>
+             </div>
+             
+             <Card className="shadow-lg border-none overflow-hidden mb-6">
+               <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+               
+               <CardHeader className="flex justify-between items-center gap-3 p-6 bg-gradient-to-b from-indigo-50 to-transparent">
+                 <div className="flex items-center gap-4">
+                   <Avatar 
+                     src={user?.profile_image || undefined}
+                     name={user?.name || user?.email?.charAt(0)?.toUpperCase() || "?"}
+                     size="lg"
+                     className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                   />
+                   <div>
+                     <h2 className="text-xl font-semibold">{profileData?.full_name || user?.email || "Пользователь"}</h2>
+                     <p className="text-sm text-gray-500">
+                       {user?.role === 'patient' ? 'Пациент' : 
+                        user?.role === 'doctor' ? 'Врач' : 'Пользователь'}
+                     </p>
+                   </div>
+                 </div>
+               </CardHeader>
+               
+               <Divider />
+               
+               <CardBody className="p-6">
+                 <div className="mb-6 bg-danger-50 text-danger p-4 rounded-lg border border-danger-200">
+                   <div className="flex items-center">
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                     </svg>
+                     <p className="font-medium">{error}</p>
+                   </div>
+                 </div>
+
+                 {profileData === null && error === "Профиль еще не создан. Пожалуйста, заполните информацию." && (
+                   <div className="mb-6 bg-blue-50 text-blue-700 p-4 rounded-lg border border-blue-200">
+                     <div className="flex items-center">
+                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                       </svg>
+                       <p className="font-medium">Ваш профиль еще не заполнен. Пожалуйста, заполните информацию ниже.</p>
+                     </div>
+                   </div>
+                 )}
+                 
+                 <div className="bg-white rounded-lg p-6 shadow-sm">
+                   {user.role === 'patient' && (
+                     <PatientProfileForm
+                       profile={profileData}
+                       onSave={handleSaveProfile}
+                       isLoading={isSaving}
+                       error={error}
+                     />
+                   )}
+
+                   {user.role === 'doctor' && (
+                     <DoctorProfileForm
+                       profile={profileData}
+                       onSave={handleSaveProfile}
+                       isLoading={isSaving}
+                       error={error}
+                     />
+                   )}
+
+                   {user.role !== 'patient' && user.role !== 'doctor' && (
+                     <div className="text-center py-4">
+                       <p className="text-gray-600">Для вашей роли профиль не предусмотрен в этом разделе.</p>
+                     </div>
+                   )}
+                 </div>
+               </CardBody>
+             </Card>
+           </div>
+         </div>
        );
    }
 
@@ -175,78 +246,105 @@ function ProfileSettingsPage() {
   // Основной UI страницы настроек профиля (после успешной загрузки или если профиль не создан)
   return (
     // Используем контейнер MUI Container для центрирования формы
-    <Container component="main" maxWidth="md" sx={{ mt: 4 }}> {/* maxWidth md для немного большей ширины */}
-      {/* Box для содержимого страницы */}
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center', // Центрирование по горизонтали
-          padding: 4, // Внутренний отступ
-          backgroundColor: 'white', // Белый фон
-          borderRadius: 1, // Скругление углов
-          boxShadow: 3, // Тень
-        }}
-      >
-        {/* Заголовок страницы */}
-        <Typography component="h1" variant="h5" sx={{ mb: 2 }}>
-          Настройки Профиля
-        </Typography>
+    <div className="py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-indigo-50 min-h-[calc(100vh-100px)]">
+      <div className="max-w-4xl mx-auto">
+        {/* Заголовок страницы с анимацией */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 mb-2">
+            Мой профиль
+          </h1>
+          <p className="text-gray-600">Управляйте личными данными и настройками</p>
+        </div>
+        
+        {/* Основная карточка профиля */}
+        <Card className="shadow-lg border-none overflow-hidden mb-6">
+          <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+          
+          <CardHeader className="flex justify-between items-center gap-3 p-6 bg-gradient-to-b from-indigo-50 to-transparent">
+            <div className="flex items-center gap-4">
+              <Avatar 
+                src={user?.profile_image || undefined}
+                name={user?.name || user?.email?.charAt(0)?.toUpperCase() || "?"}
+                size="lg"
+                className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+              />
+              <div>
+                <h2 className="text-xl font-semibold">{profileData?.full_name || user?.email || "Пользователь"}</h2>
+                <p className="text-sm text-gray-500">
+                  {user?.role === 'patient' ? 'Пациент' : 
+                   user?.role === 'doctor' ? 'Врач' : 'Пользователь'}
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          
+          <Divider />
+          
+          <CardBody className="p-6">
+            {/* Вывод сообщений */}
+            {saveSuccess && (
+              <div className="mb-6 bg-green-50 text-green-700 p-4 rounded-lg border border-green-200 animate-pulse">
+                <div className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <p className="font-medium">Профиль успешно сохранен!</p>
+                </div>
+              </div>
+            )}
+            
+            {error && error !== "Профиль еще не создан. Пожалуйста, заполните информацию." && (
+              <div className="mb-6 bg-danger-50 text-danger p-4 rounded-lg border border-danger-200">
+                <div className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <p className="font-medium">{error}</p>
+                </div>
+              </div>
+            )}
 
-        {/* Сообщения о статусе загрузки или сохранения */}
-         {/* Сообщение "Профиль еще не создан" */}
-         {profileData === null && error === "Профиль еще не создан. Пожалуйста, заполните информацию." && (
-             <Typography variant="body1" color="info" sx={{textAlign: 'center', marginBottom: 2}}> {/* Используем Typography с цветом 'info' из темы */}
-                 Ваш профиль еще не создан. Пожалуйста, заполните информацию ниже.
-             </Typography>
-         )}
-         {/* Сообщение об успешном сохранении */}
-         {profileData && saveSuccess && (
-              <Typography variant="body1" color="success" sx={{textAlign: 'center', marginBottom: 2}}>
-                  Профиль успешно сохранен!
-              </Typography>
-         )}
-          {/* Сообщение об ошибке сохранения */}
-          {error && error !== "Профиль еще не создан. Пожалуйста, заполните информацию." && (
-               <Typography variant="body1" color="error" sx={{textAlign: 'center', marginBottom: 2}}>
-                    {error} {/* Текст ошибки сохранения */}
-               </Typography>
-          )}
+            {profileData === null && error === "Профиль еще не создан. Пожалуйста, заполните информацию." && (
+              <div className="mb-6 bg-blue-50 text-blue-700 p-4 rounded-lg border border-blue-200">
+                <div className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="font-medium">Ваш профиль еще не заполнен. Пожалуйста, заполните информацию ниже.</p>
+                </div>
+              </div>
+            )}
+            
+            {/* Формы профиля */}
+            <div className="bg-white rounded-lg p-6 shadow-sm">
+              {user.role === 'patient' && (
+                <PatientProfileForm
+                  profile={profileData}
+                  onSave={handleSaveProfile}
+                  isLoading={isSaving}
+                  error={error}
+                />
+              )}
 
+              {user.role === 'doctor' && (
+                <DoctorProfileForm
+                  profile={profileData}
+                  onSave={handleSaveProfile}
+                  isLoading={isSaving}
+                  error={error}
+                />
+              )}
 
-        {/* Отображаем соответствующую форму профиля в зависимости от роли пользователя */}
-        {/* Передаем текущие данные profileData и функцию handleSaveProfile */}
-        {/* user.role доступен из стора */}
-        {user.role === 'patient' && (
-             // Рендерим компонент формы профиля Пациента
-             <PatientProfileForm
-                 profile={profileData} // Передаем текущие данные профиля (будут null, если профиль не создан)
-                 onSave={handleSaveProfile} // Передаем функцию сохранения
-                 isLoading={isSaving} // Переименовал, чтобы было понятнее - это статус сохранения
-                 error={error} // Ошибка сохранения
-             />
-        )}
-
-        {user.role === 'doctor' && (
-             // Рендерим компонент формы профиля Врача
-             <DoctorProfileForm
-                 profile={profileData} // Передаем текущие данные профиля
-                 onSave={handleSaveProfile} // Передаем функцию сохранения
-                 isLoading={isSaving} // Статус сохранения
-                 error={error} // Ошибка сохранения
-             />
-        )}
-
-        {/* Если пользователь авторизован, но его роль не 'patient' и не 'doctor' (например, admin) */}
-        {/* Для администратора, возможно, будет свой отдельный раздел */}
-        {user.role !== 'patient' && user.role !== 'doctor' && (
-            <Typography variant="body1" sx={{textAlign: 'center'}}>
-                Для вашей роли профиль не предусмотрен в этом разделе.
-            </Typography>
-        )}
-
-      </Box>
-    </Container>
+              {user.role !== 'patient' && user.role !== 'doctor' && (
+                <div className="text-center py-4">
+                  <p className="text-gray-600">Для вашей роли профиль не предусмотрен в этом разделе.</p>
+                </div>
+              )}
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+    </div>
   );
 }
 

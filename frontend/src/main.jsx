@@ -1,36 +1,33 @@
 // frontend/src/main.jsx
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-
-// Импортируем стили (SASS)
-import './index.scss'
-
-// Импортируем компоненты для роутинга
 import { BrowserRouter } from 'react-router-dom'
-
-// Импортируем ThemeProvider из Material UI для применения темы
+import { NextUIProvider } from '@nextui-org/react'
+import { GoogleOAuthProvider } from '@react-oauth/google'
 import { ThemeProvider } from '@mui/material/styles';
-// Импортируем нашу тему, определенную в src/theme/index.js
-import theme from './theme';
-// Импортируем CssBaseline из Material UI для сброса стандартных стилей браузера
-import CssBaseline from '@mui/material/CssBaseline';
+import App from './App'
 
+// Импортируем стили
+import './index.css' // Tailwind CSS
+import './index.scss' // SCSS стили
 
-// Точка входа в приложение. Рендерим корневой компонент App в элемент с id 'root' в index.html
+// Импортируем тему MUI
+import muiTheme from './theme/index'
+
+// Используйте здесь ваш реальный Client ID из Google Console
+const GOOGLE_CLIENT_ID = "735617581412-e8ceb269bj7qqrv9sl066q63g5dr5sne.apps.googleusercontent.com"
+
+// Точка входа в приложение
 ReactDOM.createRoot(document.getElementById('root')).render(
-  // React.StrictMode - вспомогательный компонент для выявления потенциальных проблем в приложении во время разработки.
   <React.StrictMode>
-    {/* ThemeProvider применяет нашу MUI тему ко всему приложению */}
-    <ThemeProvider theme={theme}>
-      {/* CssBaseline сбрасывает базовые стили браузера (margin, padding) и применяет базовые стили из темы. */}
-      <CssBaseline />
-      {/* BrowserRouter обеспечивает функциональность роутинга, используя историю браузера. */}
-      {/* Все компоненты, использующие хуки роутера (useNavigate, useLocation и т.д.) или компоненты типа Link, Route, Routes, должны быть внутри BrowserRouter. */}
-      <BrowserRouter>
-        {/* Основной компонент приложения */}
-        <App />
-      </BrowserRouter>
-    </ThemeProvider>
-  </React.StrictMode>,
+    <BrowserRouter>
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <ThemeProvider theme={muiTheme}>
+          <NextUIProvider>
+            <App />
+          </NextUIProvider>
+        </ThemeProvider>
+      </GoogleOAuthProvider>
+    </BrowserRouter>
+  </React.StrictMode>
 )

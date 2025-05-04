@@ -1,126 +1,267 @@
 // frontend/src/components/RegisterForm.jsx
 import React, { useState } from 'react';
-
-// Импортируем компоненты MUI для формы
-import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
-import Box from '@mui/material/Box';
-import CircularProgress from '@mui/material/CircularProgress';
-import Typography from '@mui/material/Typography'; // Для ошибок
-import Select from '@mui/material/Select';     // Для выпадающего списка роли
-import MenuItem from '@mui/material/MenuItem';   // Пункты списка
-import FormControl from '@mui/material/FormControl'; // Контейнер для Select с меткой
-import InputLabel from '@mui/material/InputLabel'; // Метка для Select
-
+import { Input, Button, Spinner, Select, SelectItem, Checkbox } from '@nextui-org/react';
 
 // Компонент формы регистрации
 // Принимает функцию onSubmit (которая будет вызывать регистрацию из стора),
 // isLoading (статус загрузки из стора), и error (ошибка из стора)
 function RegisterForm({ onSubmit, isLoading, error }) {
+  // Основные поля для регистрации
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState('patient'); // По умолчанию 'patient'
-  const [formError, setFormError] = useState(null); // Локальная ошибка валидации формы
+  
+  // Персональные данные
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [phone, setPhone] = useState('');
+  
+  // Роль пользователя
+  const [role, setRole] = useState('patient');
+  
+  // Согласие с условиями
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  
+  // Состояние для локальных ошибок
+  const [formError, setFormError] = useState(null);
 
   // Обработчик отправки формы
   const handleSubmit = (event) => {
     event.preventDefault();
     setFormError(null);
 
-    // Валидация на фронтенде
-    if (password !== confirmPassword) {
-       setFormError("Пароли не совпадают.");
-       return;
+    // Валидация полей
+    if (!firstName || !lastName) {
+      setFormError("Пожалуйста, укажите имя и фамилию.");
+      return;
     }
-    // TODO: Добавить валидацию email, пароля по сложности
+    
+    if (password !== confirmPassword) {
+      setFormError("Пароли не совпадают.");
+      return;
+    }
+    
+    if (password.length < 8) {
+      setFormError("Пароль должен содержать не менее 8 символов.");
+      return;
+    }
+    
+    if (!agreeToTerms) {
+      setFormError("Необходимо согласиться с условиями использования.");
+      return;
+    }
 
-    // Вызываем функцию onSubmit, переданную из родительского компонента (AuthPage)
-    onSubmit(email, password, role);
+    // Формируем данные пользователя
+    const userData = {
+      email,
+      password,
+      role,
+      profile: {
+        firstName,
+        lastName,
+        middleName,
+        phone
+      }
+    };
+
+    // Вызываем функцию onSubmit, переданную из родительского компонента
+    onSubmit(userData);
   };
 
+  const roles = [
+    { value: 'patient', label: 'Пациент' },
+    { value: 'doctor', label: 'Врач' }
+  ];
+
   return (
-     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
-       {/* Поле ввода Email */}
-       <TextField
-         margin="normal"
-         required
-         fullWidth
-         id="register-email"
-         label="Email"
-         name="email"
-         autoComplete="email"
-         autoFocus
-         value={email}
-         onChange={(e) => setEmail(e.target.value)}
-         type="email"
-       />
+    <form onSubmit={handleSubmit} className="space-y-7">
+      {/* Блок персональных данных */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+        <Input
+          id="register-first-name"
+          label="Имя"
+          placeholder="Введите ваше имя"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          variant="bordered"
+          isRequired
+          labelPlacement="outside"
+          radius="sm"
+          className="col-span-1"
+          classNames={{
+            input: "text-base py-2",
+            inputWrapper: "py-0 h-auto min-h-[56px]",
+            label: "pb-2 text-medium",
+            base: "mb-2"
+          }}
+        />
+        
+        <Input
+          id="register-last-name"
+          label="Фамилия"
+          placeholder="Введите вашу фамилию"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          variant="bordered"
+          isRequired
+          labelPlacement="outside"
+          radius="sm"
+          className="col-span-1"
+          classNames={{
+            input: "text-base py-2",
+            inputWrapper: "py-0 h-auto min-h-[56px]",
+            label: "pb-2 text-medium",
+            base: "mb-2"
+          }}
+        />
+      </div>
 
-       {/* Поле ввода Пароля */}
-       <TextField
-         margin="normal"
-         required
-         fullWidth
-         name="password"
-         label="Пароль"
-         type="password"
-         id="register-password"
-         autoComplete="new-password" // Подсказки автозаполнения
-         value={password}
-         onChange={(e) => setPassword(e.target.value)}
-       />
+      <Input
+        id="register-middle-name"
+        label="Отчество"
+        placeholder="Введите ваше отчество (если есть)"
+        value={middleName}
+        onChange={(e) => setMiddleName(e.target.value)}
+        variant="bordered"
+        labelPlacement="outside"
+        radius="sm"
+        classNames={{
+          input: "text-base py-2",
+          inputWrapper: "py-0 h-auto min-h-[56px]",
+          label: "pb-2 text-medium",
+          base: "mb-6"
+        }}
+      />
 
-        {/* Поле ввода Повтора Пароля */}
-       <TextField
-         margin="normal"
-         required
-         fullWidth
-         name="confirm-password"
-         label="Повторите пароль"
-         type="password"
-         id="register-confirm-password"
-         autoComplete="new-password"
-         value={confirmPassword}
-         onChange={(e) => setConfirmPassword(e.target.value)}
-       />
+      <Input
+        id="register-phone"
+        label="Телефон"
+        placeholder="+998(XX) XXX-XX-XX"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        variant="bordered"
+        labelPlacement="outside"
+        radius="sm"
+        type="tel"
+        classNames={{
+          input: "text-base py-2",
+          inputWrapper: "py-0 h-auto min-h-[56px]",
+          label: "pb-2 text-medium",
+          base: "mb-6"
+        }}
+      />
 
-       {/* Выбор Роли (используем FormControl и Select из MUI) */}
-       <FormControl margin="normal" fullWidth>
-           <InputLabel id="register-role-label">Роль</InputLabel>
-           <Select
-             labelId="register-role-label"
-             id="register-role"
-             value={role}
-             label="Роль" // Должен совпадать с текстом InputLabel при variant="outlined" или "filled"
-             onChange={(e) => setRole(e.target.value)}
-           >
-             <MenuItem value="patient">Пациент</MenuItem>
-             <MenuItem value="doctor">Врач</MenuItem>
-             {/* <MenuItem value="admin">Администратор</MenuItem> */}
-           </Select>
-       </FormControl>
+      <Input
+        id="register-email"
+        label="Email"
+        placeholder="Введите ваш email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        type="email"
+        variant="bordered"
+        isRequired
+        labelPlacement="outside"
+        radius="sm"
+        classNames={{
+          input: "text-base py-2",
+          inputWrapper: "py-0 h-auto min-h-[56px]",
+          label: "pb-2 text-medium",
+          base: "mb-6"
+        }}
+      />
 
+      <Input
+        id="register-password"
+        label="Пароль"
+        placeholder="Минимум 8 символов"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        type="password"
+        variant="bordered"
+        isRequired
+        labelPlacement="outside"
+        radius="sm"
+        classNames={{
+          input: "text-base py-2",
+          inputWrapper: "py-0 h-auto min-h-[56px]",
+          label: "pb-2 text-medium",
+          base: "mb-6"
+        }}
+      />
 
-        {/* Отображение локальной ошибки валидации формы */}
+      <Input
+        id="register-confirm-password"
+        label="Повторите пароль"
+        placeholder="Введите пароль еще раз"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+        type="password"
+        variant="bordered"
+        isRequired
+        labelPlacement="outside"
+        radius="sm"
+        classNames={{
+          input: "text-base py-2",
+          inputWrapper: "py-0 h-auto min-h-[56px]",
+          label: "pb-2 text-medium",
+          base: "mb-6"
+        }}
+      />
+
+      <Select
+        id="register-role"
+        label="Я регистрируюсь как"
+        selectedKeys={[role]}
+        onChange={(e) => setRole(e.target.value)}
+        variant="bordered"
+        radius="sm"
+        labelPlacement="outside"
+        classNames={{
+          base: "mb-6",
+          label: "pb-2 text-medium",
+          trigger: "py-2 min-h-[56px]",
+          value: "text-base"
+        }}
+      >
+        {roles.map((role) => (
+          <SelectItem key={role.value} value={role.value}>
+            {role.label}
+          </SelectItem>
+        ))}
+      </Select>
+
+      <Checkbox
+        isSelected={agreeToTerms}
+        onValueChange={setAgreeToTerms}
+        size="sm"
+        className="mt-6"
+      >
+        <span className="ml-1 text-sm">
+          Я согласен с <a href="#" className="text-primary hover:underline">условиями использования</a> и <a href="#" className="text-primary hover:underline">политикой конфиденциальности</a>
+        </span>
+      </Checkbox>
+
+      {/* Контейнер для сообщений об ошибках с фиксированной высотой */}
+      <div className="min-h-[60px] mt-4 mb-2">
         {formError && (
-           <Typography color="error" sx={{ mt: 2, textAlign: 'center', width: '100%' }}>
-             {formError}
-           </Typography>
+          <div className="text-danger text-sm p-3 bg-danger-50 rounded border border-danger-200">
+            {formError}
+          </div>
         )}
+      </div>
 
-       {/* Кнопка отправки формы */}
-       <Button
-         type="submit"
-         fullWidth
-         variant="contained"
-         sx={{ mt: 3, mb: 2 }}
-         disabled={isLoading}
-       >
-         {isLoading ? <CircularProgress size={24} color="inherit" /> : 'Зарегистрироваться'}
-       </Button>
-
-        {/* TODO: Добавить ссылки типа "Уже есть аккаунт?" */}
-     </Box>
+      <Button
+        type="submit"
+        color="primary"
+        className="w-full mt-4"
+        isLoading={isLoading}
+        isDisabled={isLoading || !agreeToTerms}
+        size="lg"
+      >
+        {isLoading ? <Spinner size="sm" color="white" /> : 'Зарегистрироваться'}
+      </Button>
+    </form>
   );
 }
 

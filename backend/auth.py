@@ -1,6 +1,7 @@
 # backend/auth.py
 
 import os
+import requests  # Добавляем для HTTP-запросов к Google API
 from datetime import datetime, timedelta
 from typing import Optional, Annotated # Добавляем Annotated
 from models import User, get_db
@@ -21,13 +22,17 @@ from jose import JWTError, jwt
 # Импорт для загрузки переменных окружения из .env файла
 from dotenv import load_dotenv
 
-
-# --- Настройки для JWT ---
-
 # Загружаем переменные окружения из .env файла.
 # Это должно происходить ДО попытки чтения переменных типа SECRET_KEY.
 # load_dotenv() ищет .env файл в текущей директории и родительских.
 load_dotenv()
+
+# --- Настройки для Google OAuth ---
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "735617581412-e8ceb269bj7qqrv9sl066q63g5dr5sne.apps.googleusercontent.com")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "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")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5173/auth/google/callback")
+
+# --- Настройки для JWT ---
 
 # Секретный ключ для подписи JWT. Считывается из переменной окружения SECRET_KEY.
 # Эту переменную нужно установить в вашем .env файле или в окружении сервера.
@@ -47,6 +52,8 @@ ALGORITHM = "HS256"
 # Время жизни токена доступа в минутах.
 ACCESS_TOKEN_EXPIRE_MINUTES = 30 # 30 минут - стандартное время для токенов доступа
 
+# Длина безопасного токена (для верификации email и т.д.)
+SECURE_TOKEN_LENGTH = 32
 
 # --- Схема OAuth2 для получения токена из заголовка ---
 
@@ -122,6 +129,99 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
+# --- Функция для Google OAuth ---
+async def verify_google_token(token: str) -> dict:
+    """
+    Верифицирует код авторизации Google OAuth и получает данные пользователя
+    
+    Args:
+        token (str): Код авторизации от Google OAuth
+
+    Returns:
+        dict: Данные пользователя, полученные от Google
+        
+    Raises:
+        HTTPException: Если токен невалидный или произошла ошибка
+    """
+    try:
+        # Обмен кода авторизации на токены
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            "code": token,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri": GOOGLE_REDIRECT_URI,
+            "grant_type": "authorization_code"
+        }
+        
+        token_response = requests.post(token_url, data=token_data)
+        token_response.raise_for_status()  # Проверка на ошибки HTTP
+        tokens = token_response.json()
+        
+        # Получение данных пользователя с помощью access token
+        userinfo_url = "https://www.googleapis.com/oauth2/v3/userinfo"
+        headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+        
+        userinfo_response = requests.get(userinfo_url, headers=headers)
+        userinfo_response.raise_for_status()
+        
+        return userinfo_response.json()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Could not validate Google credentials: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+# --- Функция для аутентификации через Google ---
+async def authenticate_google_user(google_data: dict, db: Session) -> User:
+    """
+    Аутентифицирует или создает пользователя на основе данных от Google OAuth
+    
+    Args:
+        google_data (dict): Данные пользователя от Google
+        db (Session): Сессия базы данных
+        
+    Returns:
+        User: Объект пользователя
+    """
+    # Извлекаем email пользователя из данных Google
+    email = google_data.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Google user data: email is required"
+        )
+    
+    # Проверяем, существует ли пользователь с таким email
+    user = db.query(User).filter(User.email == email).first()
+    
+    # Если пользователь существует, возвращаем его
+    if user:
+        # Если пользователь не активирован, активируем его (так как Google подтверждает email)
+        if not user.is_active:
+            user.is_active = True
+            db.commit()
+        return user
+    
+    # Если пользователя нет, создаем нового с ролью "patient" по умолчанию
+    # Пароль не нужен, так как вход через Google
+    hashed_password = get_password_hash(os.urandom(32).hex())  # Генерируем случайный пароль
+    
+    new_user = User(
+        email=email,
+        hashed_password=hashed_password,
+        is_active=True,  # Пользователь сразу активирован, так как Google подтверждает email
+        role="patient"  # По умолчанию роль - пациент
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return new_user
+
+
 # --- Зависимости FastAPI для аутентификации и проверки ролей ---
 
 # TokenData - это Pydantic модель для payload токена.
@@ -131,6 +231,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 # class TokenData(BaseModel):
 #     email: Optional[str] = None
 #     role: Optional[str] = None # Добавляем поле role, т.к. мы его кладем в токен
+
+# Модель для токена аутентификации
+from pydantic import BaseModel
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 async def get_current_user(
@@ -261,3 +368,53 @@ def require_role(role: str):
 #     # Этот синтаксис Annotated также явно указывает, что current_user - это User,
 #     # полученный через зависимость require_role("patient").
 #     pass
+
+# Добавляем недостающую функцию authenticate_user
+async def authenticate_user(email: str, password: str, db: Session) -> Optional[User]:
+    """
+    Аутентифицирует пользователя по email и паролю.
+    
+    Args:
+        email (str): Email пользователя.
+        password (str): Пароль пользователя.
+        db (Session): Сессия базы данных.
+        
+    Returns:
+        Optional[User]: Объект пользователя, если аутентификация успешна, иначе None.
+    """
+    # Ищем пользователя в базе данных по email
+    user = db.query(User).filter(User.email == email).first()
+    
+    # Если пользователь не найден, возвращаем None
+    if not user:
+        return None
+    
+    # Если пользователь найден, проверяем пароль
+    # Используем verify_password, чтобы сравнить переданный пароль с хэшем из БД
+    if not verify_password(password, user.hashed_password):
+        return None  # Если пароль неверный, возвращаем None
+    
+    # Если пользователь найден и пароль верный, возвращаем объект пользователя
+    return user
+
+# Добавляем функцию get_current_active_user
+async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    """
+    Зависимость FastAPI. Проверяет, что текущий пользователь активен.
+    
+    Args:
+        current_user (User): Объект пользователя, предоставленный зависимостью get_current_user.
+        
+    Returns:
+        User: Объект пользователя, если он активен.
+        
+    Raises:
+        HTTPException: С кодом 400 (Bad Request), если пользователь неактивен.
+    """
+    # Проверяем, активен ли пользователь
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inactive user"
+        )
+    return current_user

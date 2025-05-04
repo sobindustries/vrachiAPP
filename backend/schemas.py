@@ -91,6 +91,45 @@ class DoctorProfileResponse(BaseModel):
         from_attributes = True
 
 
+# --- Pydantic модели для поиска и фильтрации врачей ---
+
+# Модель для параметров фильтрации врачей
+class DoctorFilter(BaseModel):
+    specialization: Optional[str] = None  # Специализация для фильтрации
+    practice_area: Optional[str] = None   # Район практики для фильтрации
+    min_price: Optional[int] = None       # Минимальная стоимость консультации
+    max_price: Optional[int] = None       # Максимальная стоимость консультации
+
+# Модель для краткой информации о враче (для списка)
+class DoctorBrief(BaseModel):
+    id: int                      # ID профиля врача
+    user_id: int                 # ID пользователя
+    full_name: Optional[str]     # ФИО врача
+    specialization: str          # Специализация
+    cost_per_consultation: int   # Стоимость консультации
+    is_verified: bool            # Статус верификации
+
+    class Config:
+        from_attributes = True
+
+# Модель для подробной информации о враче (для детальной страницы)
+class DoctorDetail(DoctorProfileResponse):
+    # Наследуем все поля из DoctorProfileResponse и при необходимости
+    # можем добавить дополнительные поля, такие как рейтинг, кол-во отзывов и т.д.
+    rating: Optional[float] = None  # Средний рейтинг врача (заглушка)
+    reviews_count: Optional[int] = None  # Количество отзывов (заглушка)
+
+    class Config:
+        from_attributes = True
+
+# Модель для списка врачей с пагинацией (для ответа API)
+class DoctorListResponse(BaseModel):
+    items: List[DoctorBrief]       # Список врачей
+    total: int                     # Общее количество врачей (для пагинации)
+    page: int                      # Текущая страница
+    size: int                      # Размер страницы (количество элементов на странице)
+    pages: int                     # Общее количество страниц
+
 # TODO: Добавить Pydantic модели для других сущностей:
 # class ConsultationCreate(BaseModel): ...
 # class ConsultationResponse(BaseModel): ...

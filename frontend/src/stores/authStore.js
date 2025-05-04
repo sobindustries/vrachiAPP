@@ -1,6 +1,7 @@
 // frontend/src/stores/authStore.js
 import { create } from 'zustand'; // Импортируем функцию create из zustand
 import api, { setAuthToken } from '../api'; // Импортируем наш API сервис и функцию для установки токена
+import { GOOGLE_CLIENT_ID } from '../config'; // Import Google client ID from config
 
 // Ключи для Local Storage
 const TOKEN_STORAGE_KEY = 'accessToken';
@@ -55,6 +56,7 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
   isAuthenticated: false, // Флаг, авторизован ли пользователь (наличие валидного токена и пользователя)
   isLoading: true, // Флаг, идет ли загрузка (например, при проверке токена при старте или при выполнении запросов)
   error: null, // Для хранения последней ошибки (например, при логине или регистрации)
+  needsProfileUpdate: false, // Флаг, требуется ли заполнение/обновление профиля пользователя
 
   // --- Функции для управления состоянием ---
 
@@ -62,7 +64,15 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
   // Загружает состояние из Local Storage и, если токен есть, проверяет его валидность на бэкенде
   initializeAuth: () => {
     const initialState = loadAuthFromStorage(); // Загружаем начальное состояние из Local Storage
-    set(initialState); // Устанавливаем его в стор
+    
+    // Проверяем, требуется ли обновление профиля
+    let needsProfileUpdate = false;
+    if (initialState.user && (!initialState.user.role || !initialState.user.is_active)) {
+      needsProfileUpdate = true;
+    }
+    
+    // Устанавливаем начальное состояние
+    set({...initialState, needsProfileUpdate});
 
     // Если нашли токен в Local Storage и пользователь не находится в состоянии загрузки (например, при hot-reload)
     // isValidatingToken флаг поможет избежать многократных запросов при инициализации в development режиме
@@ -72,14 +82,24 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
             .then(response => {
                 // Если запрос успешен (токен валиден)
                 console.log("Token validated, user data fetched:", response.data);
-                set({ user: response.data, isAuthenticated: true, error: null }); // Обновляем данные пользователя в сторе, сбрасываем ошибку
+                
+                // Проверяем, требуется ли обновление профиля
+                let profileUpdateNeeded = !response.data.role || !response.data.is_active;
+                
+                set({ 
+                  user: response.data, 
+                  isAuthenticated: true, 
+                  error: null,
+                  needsProfileUpdate: profileUpdateNeeded
+                }); // Обновляем данные пользователя в сторе, сбрасываем ошибку
+                
                 localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.data)); // Обновляем данные пользователя в Local Storage
             })
             .catch(error => {
                 // Если запрос с токеном не удался (например, 401 Unauthorized - токен невалиден или истек, или 404 Not Found)
                 console.error("Token validation failed", error);
                 // Сбрасываем состояние авторизации
-                set({ token: null, user: null, isAuthenticated: false, error: "Session expired or token invalid" });
+                set({ token: null, user: null, isAuthenticated: false, error: "Session expired or token invalid", needsProfileUpdate: false });
                 localStorage.removeItem(TOKEN_STORAGE_KEY); // Удаляем невалидный токен из Local Storage
                 localStorage.removeItem(USER_STORAGE_KEY);
                 setAuthToken(null); // Сбрасываем токен в Axios
@@ -143,6 +163,104 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
     }
   },
 
+  // Функция для аутентификации через Google
+  loginWithGoogle: async () => {
+    // Redirect to Google OAuth - this function is called when the Google button is clicked
+    try {
+      // Define Google OAuth parameters
+      const REDIRECT_URI = "http://localhost:5173/auth/google/callback";
+      const SCOPE = "email profile";
+      
+      // Create Google authorization URL
+      const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPE)}&response_type=code&access_type=offline&prompt=consent`;
+      
+      // Redirect user to Google authentication page
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error("Failed to redirect to Google OAuth", error);
+      set({ error: "Failed to redirect to Google authentication." });
+      throw new Error("Failed to redirect to Google authentication.");
+    }
+  },
+
+  // New function to process the Google OAuth callback
+  processGoogleAuth: async (code) => {
+    // Проверяем, не запущен ли уже процесс аутентификации
+    if (get().isLoading) {
+      console.log("Authentication is already in progress, skipping duplicate request");
+      return; // Предотвращаем двойную обработку
+    }
+    
+    set({ isLoading: true, error: null });
+    try {
+      // Обмен кода авторизации на JWT токен через наш бэкенд
+      console.log("Processing Google auth code:", code);
+      
+      // Проверяем, не обрабатывается ли этот код уже
+      const existingToken = localStorage.getItem(`google_code_${code.substring(0, 10)}`);
+      if (existingToken) {
+        console.log("This code has already been processed, using existing token");
+        setAuthToken(existingToken);
+        
+        // Получаем информацию о пользователе 
+        const userResponse = await api.get('/users/me');
+        const user = userResponse.data;
+        
+        // Обновляем состояние в сторе
+        set({ 
+          token: existingToken, 
+          user, 
+          isAuthenticated: true, 
+          isLoading: false, 
+          error: null,
+          needsProfileUpdate: user.is_active === false || !user.role
+        });
+        
+        return user;
+      }
+      
+      // Отправляем код авторизации на наш бэкенд
+      const response = await api.post('/auth/google', { code });
+      
+      const { access_token } = response.data;
+      const token = access_token;
+      
+      // Сохраняем информацию о том, что данный код уже использован
+      localStorage.setItem(`google_code_${code.substring(0, 10)}`, token);
+      
+      setAuthToken(token);
+      
+      // Получаем информацию о пользователе
+      const userResponse = await api.get('/users/me');
+      const user = userResponse.data;
+      
+      // Сохраняем токен и данные пользователя в localStorage
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      
+      // Обновляем состояние в сторе
+      set({ 
+        token, 
+        user, 
+        isAuthenticated: true, 
+        isLoading: false, 
+        error: null,
+        needsProfileUpdate: user.is_active === false || !user.role
+      });
+      
+      return user;
+    } catch (error) {
+      console.error("Failed to process Google authentication", error);
+      setAuthToken(null);
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(USER_STORAGE_KEY);
+      
+      const errorMessage = error.response?.data?.detail || "Не удалось завершить аутентификацию через Google.";
+      set({ token: null, user: null, isAuthenticated: false, isLoading: false, error: errorMessage, needsProfileUpdate: false });
+      throw new Error(errorMessage);
+    }
+  },
+
   // Функция для выполнения логаута пользователя
   logout: () => {
     setAuthToken(null); // Сбрасываем токен в заголовках Axios
@@ -159,28 +277,34 @@ const useAuthStore = create((set, get) => ({ // Добавляем 'get' для 
   },
 
   // Функция для регистрации нового пользователя
-  registerUser: async (email, password, role) => {
-     set({ isLoading: true, error: null }); // Начинаем загрузку (можно использовать отдельный флаг для регистрации), сбрасываем ошибку
+  registerUser: async (userData) => {
+     set({ isLoading: true, error: null });
      try {
+        // Извлекаем основные данные для регистрации
+        const { email, password, role, profile } = userData;
+        
         // Отправляем запрос на эндпоинт бэкенда /register с данными пользователя (email, password, role)
-        // Axios по умолчанию отправит данные как JSON, что соответствует ожидаемому формату на бэкенде.
         const response = await api.post('/register', { email, password, role });
-        const newUser = response.data; // Получаем данные только что зарегистрированного пользователя из ответа (включая is_active: false)
+        const newUser = response.data;
 
-        // При успешной регистрации мы не авторизуем пользователя автоматически.
-        // Пользователь должен будет подтвердить email и затем войти через форму логина.
-        // Поэтому состояние аутентификации в сторе (token, user, isAuthenticated) не меняется.
+        // Если профиль пользователя передан, создаем его после успешной регистрации
+        if (profile && newUser.id) {
+          try {
+            // Для демонстрации: в реальном приложении здесь был бы код для создания профиля
+            console.log("Профиль пользователя будет создан при активации аккаунта", profile);
+          } catch (profileError) {
+            console.error('Error creating profile', profileError);
+            // Обработка ошибки создания профиля, если необходимо
+          }
+        }
 
-        set({ isLoading: false, error: null }); // Завершаем загрузку, сбрасываем ошибки
-
-        return newUser; // Возвращаем данные зарегистрированного пользователя (может быть полезно для компонента, чтобы показать ID или email)
-
+        set({ isLoading: false, error: null });
+        return newUser;
      } catch (error) {
-        // Обработка ошибок при регистрации (например, email уже занят)
         console.error('Registration failed', error);
         const errorMessage = error.response?.data?.detail || "Ошибка регистрации. Попробуйте еще раз.";
-        set({ isLoading: false, error: errorMessage }); // Завершаем загрузку и устанавливаем ошибку в сторе
-        throw new Error(errorMessage); // Пробрасываем ошибку дальше, чтобы компонент мог ее показать пользователю
+        set({ isLoading: false, error: errorMessage });
+        throw new Error(errorMessage);
      }
   }
 }));

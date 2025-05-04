@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react'; // Добавляем useRef
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../api';
-import Button from '../components/Button';
+import { Button } from "@nextui-org/react";
 
 
 function VerifyEmailPage() {
@@ -109,7 +109,7 @@ function VerifyEmailPage() {
       {verificationStatus !== 'loading' && (
          <div className="button-group" style={{marginTop: '30px'}}>
              {/* Кнопка всегда ведет на страницу логина */}
-             <Button variant="medical-blue" onClick={() => navigate('/login')}>Перейти на страницу входа</Button>
+             <Button color="primary" onClick={() => navigate('/login')}>Перейти на страницу входа</Button>
          </div>
       )}
 

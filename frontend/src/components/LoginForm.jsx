@@ -1,100 +1,107 @@
 // frontend/src/components/LoginForm.jsx
 import React, { useState } from 'react';
-import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
-import Box from '@mui/material/Box'; // <-- Импортируем Box
-import CircularProgress from '@mui/material/CircularProgress';
-import Typography from '@mui/material/Typography';
-
+import { Input, Button, Spinner, Checkbox, Link } from '@nextui-org/react';
 
 function LoginForm({ onSubmit, isLoading, error }) {
-  const [email, setEmail] = useState(''); // Состояние для email
-  const [password, setPassword] = useState(''); // Состояние для пароля
-  const [formError, setFormError] = useState(null); // Локальная ошибка валидации формы (если нужна)
-
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [formError, setFormError] = useState(null);
 
   // Обработчик отправки формы
   const handleSubmit = (event) => {
-    event.preventDefault(); // Предотвращаем стандартную отправку формы
-    setFormError(null); // Сбрасываем локальные ошибки формы
+    event.preventDefault();
+    setFormError(null);
 
     // Базовая валидация на фронтенде
     if (!email || !password) {
        setFormError("Пожалуйста, заполните оба поля.");
-       // TODO: Передать ошибку наверх или использовать общую ошибку из стора?
-       // Сейчас ошибки API обрабатываются в сторе и доступны через пропс `error`.
-       // Ошибки валидации формы можно обрабатывать локально, как здесь.
        return;
     }
 
-    // Вызываем функцию onSubmit, переданную из родительского компонента (AuthPage).
-    // Эта функция должна быть асинхронной и обрабатывать отправку данных на бэкенд и ошибки.
-    // Не обрабатываем try/catch здесь, так как onSubmit должен этим заниматься.
-    onSubmit(email, password);
+    // Вызываем функцию onSubmit, переданную из родительского компонента (AuthPage)
+    onSubmit(email, password, rememberMe);
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
-      {/* Поля ввода */}
-      <TextField
-        margin="normal"
-        required
-        fullWidth // <-- Уже настроено в теме по умолчанию
+    <form onSubmit={handleSubmit} className="space-y-8">
+      <Input
         id="login-email"
         label="Email"
-        name="email"
-        autoComplete="email"
-        autoFocus
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         type="email"
+        variant="bordered"
+        isRequired
+        radius="sm"
+        labelPlacement="outside"
+        placeholder="Введите ваш email"
+        autoComplete="email"
+        size="lg"
+        fullWidth
+        classNames={{
+          input: "text-base py-2",
+          inputWrapper: "py-0 h-auto min-h-[56px]",
+          label: "pb-2 text-medium",
+          base: "mb-6"
+        }}
       />
 
-      <TextField
-        margin="normal"
-        required
-        fullWidth // <-- Уже настроено в теме по умолчанию
-        name="password"
+      <Input
+        id="login-password"
         label="Пароль"
         type="password"
-        id="login-password"
-        autoComplete="current-password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        variant="bordered"
+        isRequired
+        radius="sm"
+        labelPlacement="outside"
+        placeholder="Введите ваш пароль"
+        autoComplete="current-password"
+        size="lg"
+        fullWidth
+        classNames={{
+          input: "text-base py-2",
+          inputWrapper: "py-0 h-auto min-h-[56px]",
+          label: "pb-2 text-medium",
+          base: "mb-6"
+        }}
       />
 
-       {/* Отображение локальной ошибки валидации формы */}
-       {formError && (
-          <Typography color="error" sx={{ mt: 2, mb: 2, textAlign: 'center', width: '100%' }}> {/* Добавлены mb: margin-bottom */}
-            {formError}
-          </Typography>
-       )}
+      <div className="flex justify-between items-center mt-6 mb-6">
+        <Checkbox
+          isSelected={rememberMe}
+          onValueChange={setRememberMe}
+          size="sm"
+        >
+          <span className="ml-1">Запомнить меня</span>
+        </Checkbox>
+        
+        <Link href="#" size="sm" className="text-primary font-medium">
+          Забыли пароль?
+        </Link>
+      </div>
 
-      {/* Кнопка отправки формы */}
+      {/* Контейнер для сообщений об ошибках с фиксированной высотой */}
+      <div className="min-h-[60px] mb-4">
+        {formError && (
+          <div className="text-danger text-sm p-3 bg-danger-50 rounded border border-danger-200">
+            {formError}
+          </div>
+        )}
+      </div>
+
       <Button
         type="submit"
-        fullWidth // <-- Уже настроено в теме по умолчанию
-        variant="contained" // Используем стиль с заливкой (primary color из темы)
-        sx={{ mt: 3, mb: 2 }}
-        disabled={isLoading}
+        color="primary"
+        className="w-full mt-4"
+        isLoading={isLoading}
+        size="lg"
       >
-        {isLoading ? <CircularProgress size={24} color="inherit" /> : 'Войти'}
+        {isLoading ? <Spinner size="sm" color="white" /> : 'Войти'}
       </Button>
-
-      {/* Ссылка "Забыли пароль?" и "Еще нет аккаунта?" можно добавить здесь */}
-      {/* Например, ссылка на страницу регистрации (AuthPage с активной вкладкой Регистрации) */}
-      {/*
-      <Typography variant="body2" sx={{ textAlign: 'center' }}>
-          <Link component="button" variant="body2" onClick={() => console.log('Forgot password')}>
-              Забыли пароль?
-          </Link>
-      </Typography>
-      */}
-       {/* Кнопка для переключения на регистрацию (если это не отдельная страница) */}
-       {/* Если это одна страница AuthPage, переключение идет через Tabs */}
-
-
-    </Box>
+    </form>
   );
 }
 

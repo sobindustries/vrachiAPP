@@ -21,4 +21,31 @@ export const setAuthToken = (token) => {
   }
 };
 
+// API для работы с врачами
+export const doctorsApi = {
+  // Получение списка врачей с возможностью фильтрации
+  getDoctors: async (filters = {}, page = 1, size = 10) => {
+    try {
+      // Формируем параметры запроса из переданных фильтров
+      const params = { page, size, ...filters };
+      const response = await api.get('/api/doctors', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching doctors:', error);
+      throw error;
+    }
+  },
+
+  // Получение детальной информации о враче по ID
+  getDoctorById: async (doctorId) => {
+    try {
+      const response = await api.get(`/api/doctors/${doctorId}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching doctor with ID ${doctorId}:`, error);
+      throw error;
+    }
+  }
+};
+
 export default api;

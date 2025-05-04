@@ -2,21 +2,26 @@
 
 import os
 import uuid # Импортируем uuid для генерации токенов
-from fastapi import FastAPI, Depends, HTTPException, status, APIRouter, BackgroundTasks # Добавляем BackgroundTasks для фоновых задач
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import FastAPI, Depends, HTTPException, status, APIRouter, BackgroundTasks, Query # Добавляем BackgroundTasks для фоновых задач и Query для поиска
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer # Добавляем OAuth2PasswordRequestForm и OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from typing import Annotated
+from typing import Annotated, List, Optional, Union
 from datetime import timedelta, datetime # Импортируем timedelta и datetime
 from fastapi.middleware.cors import CORSMiddleware
+import smtplib  # Для SMTP-соединения
+from email.mime.text import MIMEText  # Для создания email
+from email.mime.multipart import MIMEMultipart  # Для создания составных email
+from math import ceil
+from pydantic import BaseModel  # Для моделей данных
 
 # Импортируем наши модели и функцию для получения сессии БД
 from models import User, PatientProfile, DoctorProfile, get_db, DATABASE_URL, engine, Base # Добавляем модели профилей
 # Импортируем функции для работы с паролями и JWT, а также зависимости для аутентификации и ролей
 # get_current_user и require_role используются как зависимости в эндпоинтах
-from auth import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, require_role
+from auth import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, require_role, authenticate_user, get_current_active_user, SECURE_TOKEN_LENGTH, Token as TokenModel, verify_google_token, authenticate_google_user
 
 # Импортируем pydantic модели для валидации данных запросов и ответов
-from schemas import UserCreate, UserResponse, Token, PatientProfileCreateUpdate, PatientProfileResponse, DoctorProfileCreateUpdate, DoctorProfileResponse, Field # Импортируем Field (хотя он нужен только в schemas.py)
+from schemas import UserCreate, UserResponse, Token, PatientProfileCreateUpdate, PatientProfileResponse, DoctorProfileCreateUpdate, DoctorProfileResponse, Field, DoctorFilter, DoctorBrief, DoctorDetail, DoctorListResponse # Импортируем Field (хотя он нужен только в schemas.py), DoctorFilter, DoctorBrief, DoctorDetail, DoctorListResponse
 
 
 # Для загрузки .env файла (важно вызвать где-то в начале приложения, лучше в auth.py)
@@ -24,12 +29,19 @@ from dotenv import load_dotenv
 # Убедимся, что load_dotenv() вызывается где-то перед использованием переменных окружения.
 # В данном случае он вызывается и в models.py и в auth.py.
 # Можно вызвать явно здесь, если уверены, что он не вызывается в импортируемых модулях:
-# load_dotenv()
+load_dotenv()
 
 
 # Определяем базовый URL для подтверждения email (адрес страницы фронтенда, куда пользователь перейдет по ссылке из письма)
 # В реальном проекте это должна быть переменная окружения, читаемая из .env!
 VERIFICATION_BASE_URL = os.getenv("VERIFICATION_BASE_URL", "http://localhost:5173/verify-email") # <-- TODO: Замени на актуальный URL твоего фронтенда!
+
+# Email конфигурация
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USERNAME = os.getenv("EMAIL_USERNAME", "your_email@gmail.com")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "your_app_password")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "your_email@gmail.com")
 
 
 # Создаем таблицы в БД при старте приложения.
@@ -76,44 +88,110 @@ DbDependency = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
-# --- Вспомогательная функция для "отправки" письма ---
-# В реальном проекте здесь будет вызов реального сервиса отправки email (SendGrid, Mailgun, SMTP и т.д.)
-# Для нашего MVP просто выводим ссылку в консоль.
+# --- Функция для отправки письма с помощью SMTP ---
 def send_verification_email(email: str, token: str):
     """
-    Функция-заглушка для отправки письма с подтверждением email.
-    Вместо реальной отправки, просто выводит ссылку в лог Uvicorn.
-
+    Функция для отправки письма с подтверждением email через SMTP.
+    
     Args:
         email (str): Email пользователя.
         token (str): Токен подтверждения email.
     """
     # Формируем полную ссылку для подтверждения email
     verification_link = f"{VERIFICATION_BASE_URL}?token={token}"
-    # Выводим информацию о "письме" в стандартный вывод (который виден в консоли Uvicorn)
-    print(f"\n--- EMAIL VERIFICATION ---")
-    print(f"To: {email}")
-    print(f"Subject: Confirm your email address")
-    print(f"Link: {verification_link}")
-    print(f"--------------------------\n")
-    # TODO: В реальном проекте интегрировать сервис отправки email (например, SendGrid, Mailgun)
-    # Например:
-    # from sendgrid import SendGridAPIClient
-    # from sendgrid.helpers.mail import Mail
-    #
-    # message = Mail(
-    #     from_email='noreply@yourdomain.com', # TODO: Замени на реальный отправитель
-    #     to_emails=email,
-    #     subject='Confirm your email address',
-    #     html_content=f'<p>Please click the link to confirm your email: <a href="{verification_link}">Confirm Email</a></p>'
-    # )
-    # try:
-    #     sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY')) # TODO: Используй свою переменную окружения для ключа
-    #     response = sg.send(message)
-    #     print(f"Email sent. Status Code: {response.status_code}")
-    # except Exception as e:
-    #     print(f"Error sending email: {e}")
-    pass # Функция возвращает None
+    
+    # Создаем объект для составного сообщения (HTML + текст)
+    message = MIMEMultipart("alternative")
+    message["Subject"] = "Подтверждение email для платформы онлайн-консультаций с врачами"
+    message["From"] = EMAIL_FROM
+    message["To"] = email
+    
+    # Создаем простой текстовый вариант письма
+    text = f"""
+    Здравствуйте!
+    
+    Спасибо за регистрацию на платформе онлайн-консультаций с врачами.
+    Для подтверждения вашего email, пожалуйста, перейдите по следующей ссылке:
+    
+    {verification_link}
+    
+    Если вы не регистрировались на нашем сайте, просто проигнорируйте это письмо.
+    
+    С уважением,
+    Команда платформы онлайн-консультаций с врачами
+    """
+    
+    # Создаем HTML версию письма (с красивым форматированием)
+    html = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #1976d2; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 20px; }}
+            .button {{ display: inline-block; background-color: #1976d2; color: white; 
+                      padding: 10px 20px; text-decoration: none; border-radius: 5px; 
+                      margin: 20px 0; }}
+            .footer {{ font-size: 12px; color: #888; margin-top: 30px; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Подтверждение Email</h1>
+            </div>
+            <div class="content">
+                <p>Здравствуйте!</p>
+                <p>Спасибо за регистрацию на платформе онлайн-консультаций с врачами.</p>
+                <p>Для подтверждения вашего email, пожалуйста, нажмите на кнопку ниже:</p>
+                <p style="text-align: center;">
+                    <a href="{verification_link}" class="button">Подтвердить Email</a>
+                </p>
+                <p>Или перейдите по следующей ссылке:</p>
+                <p><a href="{verification_link}">{verification_link}</a></p>
+                <p>Если вы не регистрировались на нашем сайте, просто проигнорируйте это письмо.</p>
+            </div>
+            <div class="footer">
+                <p>С уважением,<br>Команда платформы онлайн-консультаций с врачами</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Прикрепляем текстовую и HTML части к сообщению
+    part1 = MIMEText(text, "plain")
+    part2 = MIMEText(html, "html")
+    message.attach(part1)
+    message.attach(part2)
+    
+    try:
+        # Создаем соединение с SMTP-сервером
+        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+        server.starttls()  # Включаем шифрование
+        
+        # Авторизуемся на сервере
+        server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
+        
+        # Отправляем сообщение
+        server.sendmail(EMAIL_FROM, email, message.as_string())
+        
+        # Закрываем соединение
+        server.quit()
+        
+        print(f"Email verification sent to {email}")
+    except Exception as e:
+        # В случае ошибки выводим сообщение в консоль
+        # В продакшене здесь должна быть реализована система логирования ошибок
+        print(f"Error sending email: {e}")
+        
+        # В случае ошибки отправки, выводим ссылку в консоль (как запасной вариант)
+        print(f"\n--- EMAIL VERIFICATION FAILED, SHOWING LINK ---")
+        print(f"To: {email}")
+        print(f"Subject: Confirm your email address")
+        print(f"Link: {verification_link}")
+        print(f"--------------------------------------------\n")
 
 # --- Роуты для базовых пользователей и аутентификации ---
 
@@ -410,7 +488,243 @@ def read_doctor_profile_by_user_id(user_id: int, db: DbDependency): # Не тр�
     return profile
 
 
-# TODO: Добавить эндпоинты для поиска врачей (по специализации, району)
-# TODO: Добавить эндпоинты для консультаций, чата, платежей, отзывов
-# TODO: Добавить эндпоинты для администратора (верификация врачей, управление пользователями)
-# TODO: Реализовать восстановление пароля
+# --- Эндпоинты для поиска врачей ---
+
+# Получение списка всех врачей с опциональной фильтрацией
+@app.get("/api/doctors", response_model=DoctorListResponse, tags=["doctors"])
+async def get_doctors(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),  # Опционально, может быть None для публичного доступа
+    specialization: Optional[str] = Query(None, description="Фильтр по специализации"),
+    practice_area: Optional[str] = Query(None, description="Фильтр по району практики"),
+    min_price: Optional[int] = Query(None, description="Минимальная стоимость"),
+    max_price: Optional[int] = Query(None, description="Максимальная стоимость"),
+    page: int = Query(1, description="Номер страницы (начиная с 1)"),
+    size: int = Query(10, description="Размер страницы (количество элементов)")
+):
+    """
+    Получение списка всех врачей с возможностью фильтрации по специализации, району практики и диапазону цен.
+    Поддерживает пагинацию для большого количества результатов.
+    """
+    # Создаем базовый запрос на получение всех врачей
+    query = db.query(DoctorProfile)
+    
+    # Применяем фильтры, если они указаны
+    if specialization:
+        query = query.filter(DoctorProfile.specialization.ilike(f"%{specialization}%"))
+    if practice_area:
+        query = query.filter(DoctorProfile.practice_areas.ilike(f"%{practice_area}%"))
+    if min_price is not None:
+        query = query.filter(DoctorProfile.cost_per_consultation >= min_price)
+    if max_price is not None:
+        query = query.filter(DoctorProfile.cost_per_consultation <= max_price)
+    
+    # Считаем общее количество записей после применения фильтров
+    total = query.count()
+    
+    # Добавляем пагинацию
+    pages = ceil(total / size) if total > 0 else 0
+    
+    # Проверка корректности номера страницы
+    if page < 1:
+        page = 1
+    elif page > pages and pages > 0:
+        page = pages
+    
+    # Применяем пагинацию
+    offset = (page - 1) * size
+    doctors = query.offset(offset).limit(size).all()
+    
+    # Формируем ответ
+    return {
+        "items": doctors,
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": pages
+    }
+
+# Получение детальной информации о враче по ID
+@app.get("/api/doctors/{doctor_id}", response_model=DoctorDetail, tags=["doctors"])
+async def get_doctor_by_id(
+    doctor_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)  # Опционально для публичного доступа
+):
+    """
+    Получение детальной информации о враче по ID.
+    Доступно как для авторизованных, так и для неавторизованных пользователей.
+    """
+    doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
+    
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Врач не найден")
+    
+    # Создаем объект с расширенной информацией
+    doctor_detail = doctor.__dict__.copy()
+    
+    # Добавляем заглушки для рейтинга и количества отзывов
+    # В реальном приложении эти данные будут получены из соответствующих таблиц
+    doctor_detail["rating"] = 4.5  # Заглушка, в будущем будет рассчитываться из таблицы отзывов
+    doctor_detail["reviews_count"] = 10  # Заглушка, в будущем будет считаться из таблицы отзывов
+    
+    return doctor_detail
+
+
+# --- TODO: Добавить дополнительные эндпоинты (консультации, отзывы, платежи) ---
+
+# Модель для Google OAuth запроса
+class GoogleAuthRequest(BaseModel):
+    code: str
+
+# Добавляем новый маршрут для Google OAuth авторизации
+@app.post("/auth/google", response_model=Token)
+async def google_auth(
+    data: GoogleAuthRequest,
+    db: DbDependency
+):
+    """
+    Обработка авторизации через Google OAuth.
+    Принимает код авторизации от Google, получает данные пользователя,
+    создает/обновляет пользователя в БД и возвращает JWT-токен.
+    """
+    try:
+        # Верифицируем код авторизации и получаем данные пользователя от Google
+        try:
+            google_data = await verify_google_token(data.code)
+        except HTTPException as e:
+            if "invalid_grant" in str(e):
+                # Это часто происходит при повторном использовании кода авторизации
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Google authorization code has already been used or expired. Please try again with a new authentication flow.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            # Пробрасываем исходное исключение, если это не invalid_grant
+            raise
+        
+        # Аутентифицируем или создаем пользователя на основе данных Google
+        user = await authenticate_google_user(google_data, db)
+        
+        # Создаем JWT токен для пользователя
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.email, "role": user.role},
+            expires_delta=access_token_expires
+        )
+        
+        # Возвращаем токен
+        return {"access_token": access_token, "token_type": "bearer"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Google authentication failed: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+# Класс для хранения данных профиля пользователя после Google регистрации
+class UserProfileData(BaseModel):
+    role: str = "patient"  # По умолчанию - пациент
+    full_name: str
+    contact_phone: Optional[str] = None
+    contact_address: Optional[str] = None
+    district: Optional[str] = None  # Район
+
+
+# Эндпоинт для создания/обновления профиля пользователя после Google авторизации
+@app.post("/users/me/google-profile", response_model=Union[PatientProfileResponse, DoctorProfileResponse])
+async def create_update_google_profile(
+    profile_data: UserProfileData,
+    db: DbDependency,
+    current_user: CurrentUser
+):
+    """
+    Создает или обновляет профиль пользователя после авторизации через Google.
+    """
+    # Проверяем, существует ли у пользователя профиль
+    if profile_data.role == "patient":
+        # Проверяем, существует ли профиль пациента
+        profile = db.query(PatientProfile).filter(PatientProfile.user_id == current_user.id).first()
+        
+        if not profile:
+            # Создаем новый профиль пациента
+            profile = PatientProfile(
+                user_id=current_user.id,
+                full_name=profile_data.full_name,
+                contact_phone=profile_data.contact_phone,
+                contact_address=profile_data.contact_address
+            )
+            db.add(profile)
+        else:
+            # Обновляем существующий профиль
+            profile.full_name = profile_data.full_name
+            if profile_data.contact_phone:
+                profile.contact_phone = profile_data.contact_phone
+            if profile_data.contact_address:
+                profile.contact_address = profile_data.contact_address
+        
+        # Если роль пользователя отличается от указанной, обновляем её
+        if current_user.role != "patient":
+            current_user.role = "patient"
+        
+        db.commit()
+        db.refresh(profile)
+        return profile
+        
+    elif profile_data.role == "doctor":
+        # Проверяем, существует ли профиль врача
+        profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
+        
+        # Данные для профиля врача нужно будет запросить дополнительно
+        # Здесь мы создаем только базовый профиль
+        if not profile:
+            profile = DoctorProfile(
+                user_id=current_user.id,
+                full_name=profile_data.full_name,
+                specialization="Общая практика",  # Дефолтное значение
+                experience="",
+                education="",
+                cost_per_consultation=1000,  # Дефолтное значение
+                practice_areas=profile_data.district if profile_data.district else ""
+            )
+            db.add(profile)
+        else:
+            # Обновляем только имя, остальные данные нужно обновлять через другой эндпоинт
+            profile.full_name = profile_data.full_name
+            if profile_data.district:
+                profile.practice_areas = profile_data.district
+        
+        # Если роль пользователя отличается от указанной, обновляем её
+        if current_user.role != "doctor":
+            current_user.role = "doctor"
+            
+        db.commit()
+        db.refresh(profile)
+        return profile
+    
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role specified. Must be 'patient' or 'doctor'."
+        )
+
+
+# Эндпоинт для получения списка районов Ташкента
+@app.get("/api/districts", response_model=List[str])
+async def get_districts():
+    """Возвращает список районов Ташкента"""
+    districts = [
+        "Алмазарский район",
+        "Бектемирский район",
+        "Мирабадский район",
+        "Мирзо-Улугбекский район",
+        "Сергелийский район",
+        "Учтепинский район",
+        "Чиланзарский район",
+        "Шайхантаурский район",
+        "Юнусабадский район",
+        "Яккасарайский район",
+        "Яшнабадский район"
+    ]
+    return districts
